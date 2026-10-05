@@ -73,6 +73,15 @@ td:first-child,th:first-child{text-align:left}th{font-weight:500;color:var(--mut
   <button id="undo">1球取り消す</button>
   <button id="reset">全消去</button>
 </div>
+<div class="card">
+  <b>バックアップ</b>
+  <div class="mute" id="bkInfo" style="margin:6px 0 10px"></div>
+  <div class="tools" style="margin-top:0">
+    <button id="exp">書き出し</button>
+    <button id="imp">読み込み</button>
+  </div>
+  <input type="file" id="file" accept=".json,application/json" hidden>
+</div>
 
 <script>
 const KEY="putt-log-v1";
@@ -107,6 +116,38 @@ document.querySelectorAll(".btns button").forEach(b=>b.onclick=()=>{
 });
 $("undo").onclick=()=>{log.pop();save();render()};
 $("reset").onclick=()=>{if(confirm("記録をすべて消します。よろしいですか?")){log=[];save();render()}};
+
+let meta={t:0,n:0};
+try{meta=JSON.parse(localStorage.getItem("putt-meta")||"")||meta}catch(e){}
+const saveMeta=()=>{try{localStorage.setItem("putt-meta",JSON.stringify(meta))}catch(e){}};
+function bkInfo(){
+  const since=log.length-meta.n;
+  $("bkInfo").textContent=meta.t?`最終バックアップ: ${new Date(meta.t).toLocaleDateString("ja-JP")}(以降 ${Math.max(since,0)}球分は未保存)`:"まだバックアップしていません";
+  $("bkInfo").style.color=(!meta.t&&log.length>0)||since>=100?"var(--l)":"var(--mute)";
+}
+const _render=render;render=function(){_render();bkInfo()};
+$("exp").onclick=async()=>{
+  const d=new Date(),name="putt-log-"+day(d).replace(/-/g,"")+".json";
+  const file=new File([JSON.stringify({v:1,log})],name,{type:"application/json"});
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]})}
+    else{const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+    meta={t:Date.now(),n:log.length};saveMeta();render();
+  }catch(e){}
+};
+$("imp").onclick=()=>$("file").click();
+$("file").onchange=async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{
+    const j=JSON.parse(await f.text()),arr=Array.isArray(j)?j:j.log;
+    const ok=arr.filter(x=>x&&["L","I","R"].includes(x.r)&&Number.isFinite(x.t));
+    if(!ok.length)throw 0;
+    const seen=new Set(log.map(x=>x.r+x.t));
+    const add=ok.filter(x=>!seen.has(x.r+x.t));
+    if(!confirm(`${ok.length}球分のファイルです。現在の記録に${add.length}球分を追加します(重複は無視)。よろしいですか?`))return;
+    log=log.concat(add).sort((a,b)=>a.t-b.t);save();render();
+  }catch(err){alert("読み込めませんでした。書き出したファイルを選んでください。")}
+};
 render();
 if("serviceWorker" in navigator)window.addEventListener("load",()=>{try{navigator.serviceWorker.register("sw.js")}catch(e){}});
 </script>
