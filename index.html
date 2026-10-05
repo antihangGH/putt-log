@@ -37,6 +37,10 @@ button:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
 table{width:100%;border-collapse:collapse;font-size:14px}
 td,th{padding:7px 4px;text-align:right;border-bottom:1px solid var(--line)}
 td:first-child,th:first-child{text-align:left}th{font-weight:500;color:var(--mute);font-size:12px}
+.seg{display:flex;gap:6px;margin:10px 0}
+.seg button{flex:1;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:14px;cursor:pointer}
+.seg button.on{background:var(--in);border-color:var(--in);color:#fff}
+svg.ch{width:100%;height:auto;display:block}
 .tools{display:flex;gap:10px;margin-top:14px}
 .tools button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:14px;cursor:pointer}
 </style>
@@ -62,11 +66,15 @@ td:first-child,th:first-child{text-align:left}th{font-weight:500;color:var(--mut
   <div class="row"><b>通算</b><span class="mute" id="allN"></span></div>
   <div id="all" class="legend" style="margin-top:8px"></div>
   <div class="mute" id="tilt" style="margin-top:8px"></div>
+  <div class="mute" id="streak" style="margin-top:4px"></div>
 </div>
 
 <div class="card">
-  <b>日別</b>
-  <table id="days"><thead><tr><th>日付</th><th>球数</th><th>入った</th><th>左</th><th>右</th></tr></thead><tbody></tbody></table>
+  <b>推移</b>
+  <div class="seg" id="seg"><button data-m="d" class="on">日別</button><button data-m="w">週別</button><button data-m="m">月別</button></div>
+  <div class="mute" id="chTitle"></div>
+  <div id="chart"></div>
+  <table id="days"><thead><tr><th>期間</th><th>球数</th><th>入った</th><th>左</th><th>右</th></tr></thead><tbody></tbody></table>
 </div>
 
 <div class="tools">
@@ -107,8 +115,7 @@ function render(){
   $("all").innerHTML=`<span>入った率 ${pct(a.I,a.n)}</span><span style="color:var(--l)">左 ${pct(a.L,a.n)}</span><span style="color:var(--r)">右 ${pct(a.R,a.n)}</span>`;
   const miss=a.L+a.R;
   $("tilt").textContent=miss<5?"ミスが5球以上たまると傾向を表示します":(a.L>a.R*1.25?"左に外す傾向があります":a.R>a.L*1.25?"右に外す傾向があります":"左右のミスはほぼ均等です");
-  const g={};log.forEach(x=>(g[day(x.t)]=g[day(x.t)]||[]).push(x));
-  $("days").tBodies[0].innerHTML=Object.keys(g).sort().reverse().slice(0,14).map(d=>{const c=cnt(g[d]);return`<tr><td>${d.slice(5).replace("-","/")}</td><td>${c.n}</td><td>${c.I}(${pct(c.I,c.n)})</td><td>${c.L}</td><td>${c.R}</td></tr>`}).join("");
+  drawPeriod();
 }
 document.querySelectorAll(".btns button").forEach(b=>b.onclick=()=>{
   log.push({r:b.dataset.k,t:Date.now()});save();render();
@@ -117,6 +124,46 @@ document.querySelectorAll(".btns button").forEach(b=>b.onclick=()=>{
 $("undo").onclick=()=>{log.pop();save();render()};
 $("reset").onclick=()=>{if(confirm("記録をすべて消します。よろしいですか?")){log=[];save();render()}};
 
+
+var mode="d";
+const pad2=n=>String(n).padStart(2,"0");
+function keyOf(t){
+  const d=new Date(t);
+  if(mode==="m")return d.getFullYear()+"-"+pad2(d.getMonth()+1);
+  if(mode==="w"){const m=new Date(d.getFullYear(),d.getMonth(),d.getDate()-((d.getDay()+6)%7));return day(m.getTime())}
+  return day(t);
+}
+function labelOf(k){
+  if(mode==="m")return k.slice(0,4)+"/"+k.slice(5);
+  const l=k.slice(5).replace("-","/");return mode==="w"?l+"〜":l;
+}
+function drawPeriod(){
+  const g={};log.forEach(x=>(g[keyOf(x.t)]=g[keyOf(x.t)]||[]).push(x));
+  const lim=mode==="d"?14:12,keys=Object.keys(g).sort().slice(-lim);
+  const rows=keys.map(k=>({k,c:cnt(g[k])}));
+  $("chTitle").textContent="入った率の推移(直近"+rows.length+(mode==="d"?"日":mode==="w"?"週":"か月")+")";
+  const W=320,H=140,L=30,R=10,T=10,B=22,iw=W-L-R,ih=H-T-B;
+  const X=i=>L+(rows.length<2?iw/2:i*iw/(rows.length-1)),Y=v=>T+ih*(1-v);
+  let sv=`<svg class="ch" viewBox="0 0 ${W} ${H}" role="img" aria-label="入った率の推移">`;
+  [0,.5,1].forEach(v=>{sv+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" style="stroke:var(--line)"/><text x="${L-4}" y="${Y(v)+4}" text-anchor="end" font-size="10" style="fill:var(--mute)">${v*100}%</text>`});
+  if(rows.length){
+    const pts=rows.map((r,i)=>[X(i),Y(r.c.n?r.c.I/r.c.n:0)]);
+    if(pts.length>1)sv+=`<polyline fill="none" stroke-width="2.5" stroke-linejoin="round" style="stroke:var(--in)" points="${pts.map(p=>p.join(",")).join(" ")}"/>`;
+    pts.forEach(p=>sv+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" style="fill:var(--in)"/>`);
+    const idx=[...new Set([0,Math.floor((rows.length-1)/2),rows.length-1])];
+    idx.forEach(i=>sv+=`<text x="${X(i)}" y="${H-6}" text-anchor="${i===0&&rows.length>1?"start":i===rows.length-1&&rows.length>1?"end":"middle"}" font-size="10" style="fill:var(--mute)">${labelOf(rows[i].k)}</text>`);
+  }
+  $("chart").innerHTML=sv+"</svg>";
+  $("days").tBodies[0].innerHTML=rows.slice().reverse().map(r=>`<tr><td>${labelOf(r.k)}</td><td>${r.c.n}</td><td>${r.c.I}(${pct(r.c.I,r.c.n)})</td><td>${r.c.L}</td><td>${r.c.R}</td></tr>`).join("");
+}
+document.querySelectorAll("#seg button").forEach(b=>b.onclick=()=>{
+  mode=b.dataset.m;document.querySelectorAll("#seg button").forEach(x=>x.classList.toggle("on",x===b));drawPeriod();
+});
+function streakInfo(){
+  let best=0,run=0;log.forEach(x=>{run=x.r==="I"?run+1:0;if(run>best)best=run});
+  let cur=0;for(let i=log.length-1;i>=0&&log[i].r==="I";i--)cur++;
+  $("streak").textContent=log.length?`連続カップイン 最高 ${best}球 / 現在 ${cur}球`:"";
+}
 let meta={t:0,n:0};
 try{meta=JSON.parse(localStorage.getItem("putt-meta")||"")||meta}catch(e){}
 const saveMeta=()=>{try{localStorage.setItem("putt-meta",JSON.stringify(meta))}catch(e){}};
@@ -125,7 +172,7 @@ function bkInfo(){
   $("bkInfo").textContent=meta.t?`最終バックアップ: ${new Date(meta.t).toLocaleDateString("ja-JP")}(以降 ${Math.max(since,0)}球分は未保存)`:"まだバックアップしていません";
   $("bkInfo").style.color=(!meta.t&&log.length>0)||since>=100?"var(--l)":"var(--mute)";
 }
-const _render=render;render=function(){_render();bkInfo()};
+const _render=render;render=function(){_render();bkInfo();streakInfo()};
 $("exp").onclick=async()=>{
   const d=new Date(),name="putt-log-"+day(d).replace(/-/g,"")+".json";
   const file=new File([JSON.stringify({v:1,log})],name,{type:"application/json"});
