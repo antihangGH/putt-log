@@ -41,6 +41,9 @@ td:first-child,th:first-child{text-align:left}th{font-weight:500;color:var(--mut
 .seg button{flex:1;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:14px;cursor:pointer}
 .seg button.on{background:var(--in);border-color:var(--in);color:#fff}
 svg.ch{width:100%;height:auto;display:block}
+.rng{display:flex;align-items:center;gap:6px;margin:8px 0}
+.rng input{flex:1;min-width:0;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:14px;font-family:inherit}
+.seg.p button{padding:8px 2px;font-size:13px}
 .tools{display:flex;gap:10px;margin-top:14px}
 .tools button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:14px;cursor:pointer}
 </style>
@@ -63,7 +66,9 @@ svg.ch{width:100%;height:auto;display:block}
 </div>
 
 <div class="card">
-  <div class="row"><b>通算</b><span class="mute" id="allN"></span></div>
+  <div class="row"><b>期間集計</b><span class="mute" id="allN"></span></div>
+  <div class="seg p" id="pre"><button data-p="all" class="on">全期間</button><button data-p="m">今月</button><button data-p="30">直近30日</button><button data-p="7">直近7日</button></div>
+  <div class="rng"><input type="date" id="rf" aria-label="開始日"><span class="mute">〜</span><input type="date" id="rt" aria-label="終了日"></div>
   <div id="all" class="legend" style="margin-top:8px"></div>
   <div class="mute" id="tilt" style="margin-top:8px"></div>
   <div class="mute" id="streak" style="margin-top:4px"></div>
@@ -103,7 +108,7 @@ const COL={L:"var(--l)",I:"var(--in)",R:"var(--r)"},LAB={L:"左",I:"○",R:"右"
 const $=id=>document.getElementById(id);
 
 function render(){
-  const today=day(Date.now()),t=cnt(log.filter(x=>day(x.t)===today)),a=cnt(log);
+  const today=day(Date.now()),t=cnt(log.filter(x=>day(x.t)===today)),a=cnt(rangeLog());
   $("todayN").textContent=t.n+"球";
   $("rate").textContent=pct(t.I,t.n);
   $("bar").innerHTML=t.n?["L","I","R"].map(k=>`<i style="width:${t[k]/t.n*100}%;background:${COL[k]}"></i>`).join(""):"";
@@ -125,6 +130,22 @@ $("undo").onclick=()=>{log.pop();save();render()};
 $("reset").onclick=()=>{if(confirm("記録をすべて消します。よろしいですか?")){log=[];save();render()}};
 
 
+
+var rFrom="",rTo="";
+function rangeLog(){return log.filter(x=>{const d=day(x.t);return (!rFrom||d>=rFrom)&&(!rTo||d<=rTo)})}
+function setRange(f,t,p){
+  rFrom=f;rTo=t;$("rf").value=f;$("rt").value=t;
+  document.querySelectorAll("#pre button").forEach(b=>b.classList.toggle("on",b.dataset.p===p));
+  render();
+}
+document.querySelectorAll("#pre button").forEach(b=>b.onclick=()=>{
+  const n=new Date(),td=day(n.getTime()),p=b.dataset.p;
+  if(p==="all")setRange("","","all");
+  else if(p==="m")setRange(day(new Date(n.getFullYear(),n.getMonth(),1).getTime()),td,"m");
+  else setRange(day(new Date(n.getFullYear(),n.getMonth(),n.getDate()-(+p-1)).getTime()),td,p);
+});
+$("rf").onchange=()=>setRange($("rf").value,rTo,"");
+$("rt").onchange=()=>setRange(rFrom,$("rt").value,"");
 var mode="d";
 const pad2=n=>String(n).padStart(2,"0");
 function keyOf(t){
@@ -160,9 +181,9 @@ document.querySelectorAll("#seg button").forEach(b=>b.onclick=()=>{
   mode=b.dataset.m;document.querySelectorAll("#seg button").forEach(x=>x.classList.toggle("on",x===b));drawPeriod();
 });
 function streakInfo(){
-  let best=0,run=0;log.forEach(x=>{run=x.r==="I"?run+1:0;if(run>best)best=run});
-  let cur=0;for(let i=log.length-1;i>=0&&log[i].r==="I";i--)cur++;
-  $("streak").textContent=log.length?`連続カップイン 最高 ${best}球 / 現在 ${cur}球`:"";
+  let best=0,run=0;const rl=rangeLog();rl.forEach(x=>{run=x.r==="I"?run+1:0;if(run>best)best=run});
+  let cur=0;for(let i=rl.length-1;i>=0&&rl[i].r==="I";i--)cur++;
+  $("streak").textContent=rl.length?`連続カップイン 最高 ${best}球 / 現在 ${cur}球`:"";
 }
 let meta={t:0,n:0};
 try{meta=JSON.parse(localStorage.getItem("putt-meta")||"")||meta}catch(e){}
