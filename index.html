@@ -44,6 +44,8 @@ svg.ch{width:100%;height:auto;display:block}
 .rng{display:flex;align-items:center;gap:6px;margin:8px 0}
 .rng input{flex:1;min-width:0;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:14px;font-family:inherit}
 .seg.p button{padding:8px 2px;font-size:13px}
+.undo{display:block;width:100%;margin-top:10px;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:16px;cursor:pointer;touch-action:manipulation}
+.undo:active{transform:scale(.98)}
 .tools{display:flex;gap:10px;margin-top:14px}
 .tools button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-size:14px;cursor:pointer}
 </style>
@@ -55,6 +57,7 @@ svg.ch{width:100%;height:auto;display:block}
   <button id="bi" data-k="I">入った<small>カップイン</small></button>
   <button id="br" data-k="R">右<small>ミス</small></button>
 </div>
+<button id="undo" class="undo">↩ 1球取り消す</button>
 
 <div class="card">
   <div class="row"><span class="mute">今日の成功率</span><span class="mute" id="todayN"></span></div>
@@ -83,7 +86,6 @@ svg.ch{width:100%;height:auto;display:block}
 </div>
 
 <div class="tools">
-  <button id="undo">1球取り消す</button>
   <button id="reset">全消去</button>
 </div>
 <div class="card">
@@ -96,6 +98,7 @@ svg.ch{width:100%;height:auto;display:block}
   <input type="file" id="file" accept=".json,application/json" hidden>
 </div>
 
+<div class="mute" style="text-align:center;margin:18px 0 4px;font-size:12px">バージョン 5</div>
 <script>
 const KEY="putt-log-v1";
 let log=[];
